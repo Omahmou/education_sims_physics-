@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Electromagnet Simulation</title>
+  <style>
+    /* Global Reset & Centralized Layout */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; 
+      padding: 0;
+      width: 100vw; 
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      overflow: hidden; /* Prevent scrolling */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    /* Main Container */
+    #container {
+      width: 90%;
+      max-width: 1000px;
+      height: 90%;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    h1 {
+      text-align: center;
+      margin: 20px 0 10px;
+      font-size: 24px;
+    }
+    /* Top Bar: Description & Controls */
+    #topBar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 20px;
+      border-bottom: 1px solid #ccc;
+    }
+    #description {
+      flex: 1;
+      text-align: center;
+      font-size: 14px;
+      color: #333;
+      padding-right: 20px;
+      border-right: 1px solid #ddd;
+    }
+    #controls {
+      flex: 1;
+      text-align: center;
+    }
+    #controls div {
+      margin-bottom: 8px;
+    }
+    #controls label {
+      font-size: 14px;
+      margin-right: 5px;
+    }
+    #controls input[type="number"] {
+      width: 70px;
+      padding: 4px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      margin-left: 5px;
+    }
+    #controls button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      color: white;
+      margin: 5px;
+    }
+    #controls button:hover {
+      background-color: #45a049;
+    }
+    /* Info Panel */
+    #infoPanel {
+      text-align: center;
+      background: #d0d0d0;
+      padding: 8px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    /* Canvas Container */
+    #canvasContainer {
+      flex: 1;
+      position: relative;
+      background: #fff;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Footer Branding */
+    #footer {
+      text-align: center;
+      background: #e0e0e0;
+      padding: 10px;
+      font-size: 12px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Electromagnet Simulation</h1>
+    <div id="topBar">
+      <div id="description">
+        <p>
+          Electromagnets convert electrical energy into strong magnetic fields. Adjust the coil turns, current, and ball mass (in grams) to see the effects.
+        </p>
+      </div>
+      <div id="controls">
+        <div>
+          <label>Coil Turns (N):
+            <input type="number" id="coilTurns" placeholder="100" step="1" min="1">
+          </label>
+        </div>
+        <div>
+          <label>Current (A):
+            <input type="number" id="current" placeholder="5" step="0.1" min="0">
+          </label>
+        </div>
+        <div>
+          <label>Object Mass (g):
+            <input type="number" id="objectMass" placeholder="100" step="1" min="1">
+          </label>
+        </div>
+        <div>
+          <label>Initial Distance (px):
+            <input type="number" id="initDistance" placeholder="100" step="1" min="20">
+          </label>
+        </div>
+        <div>
+          <button type="button" id="startButton">Start</button>
+          <button type="button" id="resetButton">Reset</button>
+        </div>
+      </div>
+    </div>
+    <div id="infoPanel">Status: Not started.</div>
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+    </div>
+    <div id="footer">
+      Dr. Omar Mahmoud Studios © 2025
+    </div>
+  </div>
+  
+  <script>
+    (function(){
+      // Canvas & context setup
+      var canvas = document.getElementById("canvas");
+      var ctx = canvas.getContext("2d");
+      var infoPanel = document.getElementById("infoPanel");
+
+      // Input elements
+      var coilTurnsInput = document.getElementById("coilTurns");
+      var currentInput = document.getElementById("current");
+      var objectMassInput = document.getElementById("objectMass");
+      var initDistanceInput = document.getElementById("initDistance");
+
+      var startButton = document.getElementById("startButton");
+      var resetButton = document.getElementById("resetButton");
+
+      // Simulation state variables
+      var simulationRunning = false;
+      var animationFrameId;
+      var dt = 0.02; // time step (s)
+      var elapsedTime = 0;
+      var scale = 10; // movement scale
+
+      // Global computed objects
+      var magnet = null, ball = null, battery = null;
+      var numCoils = 0, coilMargin = 2, outerCoilRadius = 0;
+
+      // Canvas dimensions and resize
+      var canvasWidth, canvasHeight;
+      function resizeCanvas() {
+        var container = document.getElementById("canvasContainer");
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+        if (!simulationRunning) drawBackground();
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      // Draw background gradient
+      function drawBackground() {
+        var gradient = ctx.createLinearGradient(0, 0, 0, canvasHeight);
+        gradient.addColorStop(0, "#e0f7fa");
+        gradient.addColorStop(1, "#ffffff");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+      }
+
+      // Initialize simulation using user inputs.
+      function initSimulation() {
+        var N = parseFloat(coilTurnsInput.value);
+        var I = parseFloat(currentInput.value);
+        var mass = parseFloat(objectMassInput.value);
+        var initDistance = parseFloat(initDistanceInput.value);
+        if (isNaN(N) || isNaN(I) || isNaN(mass) || isNaN(initDistance)) {
+          infoPanel.innerText = "Error: Please enter valid numbers for all inputs.";
+          return;
+        }
+        // Base values for scaling
+        var baseMagnetRadius = 30; // magnet core radius (px)
+        var baseCurrent = 5;       // reference current (A) for battery scaling
+        var baseBatteryWidth = 20;
+        var baseBatteryHeight = 40;
+        var baseBallMass = 100;    // reference mass in grams
+        var baseBallRadius = 30;   // for a 100 g ball
+
+        // Create circular magnet (centered)
+        magnet = {
+          cx: canvasWidth / 2,
+          cy: canvasHeight / 2,
+          radius: baseMagnetRadius,
+          turns: N,
+          current: I
+        };
+        
+        // Determine number of coils (cap at 20 for clarity)
+        numCoils = Math.min(Math.floor(N), 20);
+        if(numCoils < 1) numCoils = 1;
+        // Outer coil radius: magnet radius plus spacing
+        outerCoilRadius = magnet.radius + numCoils * coilMargin;
+        
+        // Battery scales gently with current.
+        // For I <= baseCurrent, battery scale is 1; otherwise, increase by 5% per amp above baseCurrent.
+        var batteryScale = I <= baseCurrent ? 1 : 1 + (I - baseCurrent) * 0.05;
+        battery = {
+          width: baseBatteryWidth * batteryScale,
+          height: baseBatteryHeight * batteryScale
+        };
+        // Position the battery to the left of the outer coils with an extra gap.
+        battery.x = magnet.cx - outerCoilRadius - battery.width - 20;
+        battery.y = magnet.cy - battery.height / 2;
+        
+        // Ball scales with mass using cube-root scaling.
+        // For a 100 g ball, the radius is baseBallRadius.
+        ball = {
+          radius: baseBallRadius * Math.cbrt(mass / baseBallMass),
+          mass: mass,
+          x: magnet.cx + outerCoilRadius + initDistance,
+          y: canvasHeight / 2,
+          v: 0
+        };
+        
+        elapsedTime = 0;
+        infoPanel.innerHTML = "Status: Simulation started...";
+      }
+
+      // Reset simulation state (preserving inputs)
+      function resetSimulationState() {
+        simulationRunning = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        infoPanel.innerText = "Status: Not started.";
+        magnet = null;
+        ball = null;
+        battery = null;
+        elapsedTime = 0;
+      }
+
+      // Full reset: clear state and input fields.
+      function resetSimulation() {
+        resetSimulationState();
+        coilTurnsInput.value = "";
+        currentInput.value = "";
+        objectMassInput.value = "";
+        initDistanceInput.value = "";
+      }
+
+      // Draw the battery (power source) without a yellow outline.
+      function drawBattery(batt) {
+        ctx.save();
+        // Use a subtle grey gradient for the battery body.
+        var batteryGradient = ctx.createLinearGradient(batt.x, batt.y, batt.x + batt.width, batt.y + batt.height);
+        batteryGradient.addColorStop(0, "#cccccc");
+        batteryGradient.addColorStop(1, "#888888");
+        ctx.fillStyle = batteryGradient;
+        ctx.fillRect(batt.x, batt.y, batt.width, batt.height);
+        // Draw battery symbol (emoji) centered in the battery.
+        ctx.font = (batt.height * 0.8) + "px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#333";
+        ctx.fillText("🔋", batt.x + batt.width/2, batt.y + batt.height/2);
+        ctx.restore();
+      }
+
+      // Draw two wires connecting the battery terminals (top & bottom) to the coil assembly.
+      function drawWires(batt, magnet, outerRadius) {
+        ctx.save();
+        ctx.strokeStyle = "#555";
+        ctx.lineWidth = 2;
+        // Connection points on the coil assembly (closer together).
+        var topConnectionX = magnet.cx - outerRadius * 0.6;
+        var topConnectionY = magnet.cy - outerRadius * 0.6;
+        var bottomConnectionX = magnet.cx - outerRadius * 0.6;
+        var bottomConnectionY = magnet.cy + outerRadius * 0.6;
+        // Top wire
+        ctx.beginPath();
+        ctx.moveTo(batt.x + batt.width/2, batt.y);
+        ctx.lineTo(topConnectionX, topConnectionY);
+        ctx.stroke();
+        // Bottom wire
+        ctx.beginPath();
+        ctx.moveTo(batt.x + batt.width/2, batt.y + batt.height);
+        ctx.lineTo(bottomConnectionX, bottomConnectionY);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw the circular electromagnet core with a radial gradient.
+      function drawMagnet(magnet) {
+        ctx.save();
+        var grad = ctx.createRadialGradient(magnet.cx, magnet.cy, magnet.radius * 0.3, magnet.cx, magnet.cy, magnet.radius);
+        grad.addColorStop(0, "#999");
+        grad.addColorStop(1, "#444");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(magnet.cx, magnet.cy, magnet.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Draw coils as concentric rings around the magnet.
+      function drawCoils(magnet, numCoils, margin) {
+        ctx.save();
+        for (var i = 1; i <= numCoils; i++) {
+          var ringRadius = magnet.radius + i * margin;
+          ctx.beginPath();
+          ctx.arc(magnet.cx, magnet.cy, ringRadius, 0, Math.PI * 2);
+          ctx.strokeStyle = "#FF5722";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Draw the ferromagnetic ball with a radial gradient.
+      function drawBall(b) {
+        ctx.save();
+        var grad = ctx.createRadialGradient(b.x - b.radius/3, b.y - b.radius/3, b.radius/2, b.x, b.y, b.radius);
+        grad.addColorStop(0, "#888");
+        grad.addColorStop(1, "#000");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Update simulation physics: compute magnetic force and update ball motion.
+      function updateSimulation() {
+        if (!magnet || !ball) return;
+        elapsedTime += dt;
+        // Distance from ball to the outer edge of the coils (magnet's rightmost point)
+        var d = ball.x - (magnet.cx + outerCoilRadius);
+        d = Math.max(d, 20);
+        // Magnetic force model: F ~ k*(N*I)^2 / d^2.
+        // Using k = 0.2 (tuned for these scaling factors).
+        var k = 0.2;
+        var force = k * Math.pow(magnet.turns * magnet.current, 2) / (d * d);
+        var acceleration = force / ball.mass;
+        ball.v += acceleration * dt;
+        // Move the ball leftward toward the magnet.
+        ball.x -= ball.v * dt * scale;
+        // Stop simulation if the ball touches the outer coil.
+        if (ball.x - ball.radius <= magnet.cx + outerCoilRadius) {
+          ball.x = magnet.cx + outerCoilRadius + ball.radius;
+          simulationRunning = false;
+        }
+      }
+
+      // Render the simulation scene.
+      function drawSimulation() {
+        drawBackground();
+        if (battery) drawBattery(battery);
+        if (battery && magnet) drawWires(battery, magnet, outerCoilRadius);
+        if (magnet) {
+          drawCoils(magnet, numCoils, coilMargin);
+          drawMagnet(magnet);
+        }
+        if (ball) drawBall(ball);
+      }
+
+      // Update the info panel.
+      function updateInfo() {
+        var infoText = "Time: " + elapsedTime.toFixed(2) + " s | Velocity: " + (ball ? ball.v.toFixed(2) : "0") + " px/s";
+        infoPanel.innerHTML = infoText;
+      }
+
+      // Main simulation loop.
+      function loop() {
+        if (!simulationRunning) return;
+        updateSimulation();
+        drawSimulation();
+        updateInfo();
+        animationFrameId = requestAnimationFrame(loop);
+      }
+
+      // Prepare the interface on page load without auto-starting the simulation.
+      window.addEventListener("load", function(){
+        // Set default values if not already provided.
+        if (!coilTurnsInput.value) coilTurnsInput.value = "100";
+        if (!currentInput.value) currentInput.value = "5";
+        if (!objectMassInput.value) objectMassInput.value = "100";
+        if (!initDistanceInput.value) initDistanceInput.value = "100";
+        
+        // Prepare the canvas and interface, but do not start the simulation.
+        resetSimulationState();
+        drawBackground();
+      });
+
+      // Start simulation when the "Start" button is clicked.
+      startButton.addEventListener("click", function(){
+        resetSimulationState();
+        initSimulation();
+        if (magnet && ball && battery) {
+          simulationRunning = true;
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      });
+
+      // Reset simulation when the "Reset" button is clicked.
+      resetButton.addEventListener("click", function(){
+        resetSimulation();
+      });
+
+      drawBackground();
+    })();
+  </script>
+</body>
+</html>

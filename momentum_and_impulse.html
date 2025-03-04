@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Car Momentum &amp; Impulse Simulation</title>
+  <style>
+    /* Global Reset and Full-Screen Setup */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%; height: 100%;
+      padding: 10px;
+    }
+    h1 {
+      width: 100%; text-align: center;
+      font-size: 24px; margin: 10px 0;
+    }
+    /* Controls Panel */
+    #controls {
+      width: 100%;
+      background: #e0e0e0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    /* Info Panel – numeric values in red */
+    #infoPanel {
+      width: 100%;
+      background: #d0d0d0;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    /* Canvas Container */
+    #canvasContainer {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 1px solid #000;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    /* Simulation Form */
+    #simForm {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px; width: 100%;
+    }
+    #simForm label {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #simForm input[type="number"] {
+      width: 80px;
+      padding: 4px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #simForm input[type="radio"] { margin-right: 5px; }
+    #simForm button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      color: white;
+    }
+    #simForm button:hover { background-color: #45a049; }
+    /* Input sections – only active section is visible */
+    .input-section { display: none; width: 100%; }
+    .input-section.active {
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    /* Description block */
+    #description {
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding: 6px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Car Momentum &amp; Impulse Simulation</h1>
+    
+    <div id="controls">
+      <form id="simForm">
+        <!-- Mode selection -->
+        <div class="row">
+          <label>
+            <input type="radio" name="mode" value="momentum" checked>
+            1. Momentum
+          </label>
+          <label>
+            <input type="radio" name="mode" value="impulse">
+            2. Impulse
+          </label>
+        </div>
+        <!-- Description -->
+        <div id="description">
+          <strong>Momentum Simulation:</strong> A red SUV moves with constant velocity on a desert road. Momentum = mass × velocity.
+        </div>
+        <!-- Momentum Inputs -->
+        <div id="momentumInputs" class="input-section active">
+          <div class="row">
+            <label>
+              Car Mass (kg):
+              <input type="number" id="momMassInput" placeholder="e.g., 1200" step="1" min="1">
+            </label>
+            <label>
+              Car Velocity (m/s):
+              <input type="number" id="momVelocityInput" placeholder="e.g., 20" step="0.1">
+            </label>
+          </div>
+        </div>
+        <!-- Impulse Inputs -->
+        <div id="impulseInputs" class="input-section">
+          <div class="row">
+            <label>
+              Car Mass (kg):
+              <input type="number" id="impMassInput" placeholder="e.g., 1200" step="1" min="1">
+            </label>
+            <label>
+              Initial Velocity (m/s):
+              <input type="number" id="impVelocityInput" placeholder="e.g., 20" step="0.1">
+            </label>
+            <label>
+              Collision Time (s):
+              <input type="number" id="collTimeInput" placeholder="e.g., 2" step="0.1" min="0.1">
+            </label>
+          </div>
+          <div class="row">
+            <small>Longer collision time means a softer impact (lower average force).</small>
+          </div>
+        </div>
+        <!-- Control Buttons -->
+        <div class="row">
+          <button type="button" id="startButton">Start Simulation</button>
+          <button type="button" id="resetButton">Reset</button>
+        </div>
+      </form>
+    </div>
+    
+    <div id="infoPanel">Status: Not started.</div>
+    
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  
+  <script>
+    (function(){
+      // Canvas & context setup
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      // Controls and input elements
+      const simForm = document.getElementById("simForm");
+      const modeInputs = document.getElementsByName("mode");
+      const descriptionDiv = document.getElementById("description");
+      const infoPanel = document.getElementById("infoPanel");
+      
+      // Momentum mode inputs
+      const momMassInput = document.getElementById("momMassInput");
+      const momVelocityInput = document.getElementById("momVelocityInput");
+      // Impulse mode inputs
+      const impMassInput = document.getElementById("impMassInput");
+      const impVelocityInput = document.getElementById("impVelocityInput");
+      const collTimeInput = document.getElementById("collTimeInput");
+      
+      const momentumInputs = document.getElementById("momentumInputs");
+      const impulseInputs = document.getElementById("impulseInputs");
+      
+      const startButton = document.getElementById("startButton");
+      const resetButton = document.getElementById("resetButton");
+      
+      // Simulation state variables
+      const dt = 0.02;
+      let simulationRunning = false;
+      let mode = "momentum"; // "momentum" or "impulse"
+      let animationFrameId;
+      let elapsedTime = 0; // internal simulation time
+      let displayTime = 0; // time displayed in info panel (stops at collision in impulse mode)
+      
+      let canvasWidth, canvasHeight;
+      function resizeCanvas() {
+        const container = document.getElementById("canvasContainer");
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+        if (!simulationRunning) drawDesertBackground();
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      
+      // --- Desert Background with Sand Dunes and Road --- 
+      function drawDesertBackground() {
+        // Fill with desert sand color.
+        ctx.fillStyle = "#EDC9AF";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        // Draw sand dunes.
+        ctx.fillStyle = "#F4A460";
+        ctx.beginPath();
+        ctx.ellipse(150, canvasHeight - 200, 100, 40, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(400, canvasHeight - 220, 120, 50, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(700, canvasHeight - 190, 80, 30, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Draw road at the bottom.
+        const roadY = canvasHeight - 120;
+        ctx.fillStyle = "#555";
+        ctx.fillRect(0, roadY, canvasWidth, 40);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 4;
+        for (let x = 0; x < canvasWidth; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, roadY + 20);
+          ctx.lineTo(x + 20, roadY + 20);
+          ctx.stroke();
+        }
+      }
+      
+      // --- SUV Drawing Function ---
+      function drawSUV(car, deformed) {
+        const bodyHeight = car.height * 0.7;
+        const roofWidth = car.width * 0.9;
+        const roofHeight = car.height * 0.4;
+        const roofX = car.x + (car.width - roofWidth) / 2;
+        const roofY = car.y - roofHeight;
+        
+        if (!deformed) {
+          ctx.fillStyle = "#B22222";
+          ctx.fillRect(car.x, car.y, car.width, bodyHeight);
+          ctx.fillStyle = "#000";
+          ctx.fillRect(roofX, roofY, roofWidth, roofHeight);
+          ctx.fillStyle = "#ADD8E6";
+          const winPadding = roofWidth * 0.05;
+          const windowWidth = (roofWidth - 3 * winPadding) / 2;
+          const windowHeight = roofHeight * 0.6;
+          const backWinX = roofX + winPadding;
+          const winY = roofY + (roofHeight - windowHeight) / 2;
+          ctx.fillRect(backWinX, winY, windowWidth, windowHeight);
+          const frontWinX = backWinX + windowWidth + winPadding;
+          ctx.fillRect(frontWinX, winY, windowWidth, windowHeight);
+          ctx.fillStyle = "#333";
+          ctx.fillRect(car.x + car.width - 10, car.y + bodyHeight * 0.3, 10, bodyHeight * 0.4);
+          const wheelOuterRadius = 15;
+          const wheelInnerRadius = 7.5;
+          const leftWheelX = car.x + car.width * 0.25;
+          const rightWheelX = car.x + car.width * 0.75;
+          const wheelY = car.y + bodyHeight;
+          ctx.fillStyle = "gray";
+          ctx.beginPath();
+          ctx.arc(leftWheelX, wheelY, wheelOuterRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(leftWheelX, wheelY, wheelInnerRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "gray";
+          ctx.beginPath();
+          ctx.arc(rightWheelX, wheelY, wheelOuterRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(rightWheelX, wheelY, wheelInnerRadius, 0, Math.PI * 2);
+          ctx.fill();
+          const headlightRadius = 4;
+          const frontLightY1 = car.y + bodyHeight * 0.3;
+          const frontLightY2 = car.y + bodyHeight * 0.7;
+          const frontLightX = car.x + car.width + headlightRadius;
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(frontLightX, frontLightY1, headlightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(frontLightX, frontLightY2, headlightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          const taillightRadius = 4;
+          const backLightY1 = car.y + bodyHeight * 0.3;
+          const backLightY2 = car.y + bodyHeight * 0.7;
+          const backLightX = car.x - taillightRadius;
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          ctx.arc(backLightX, backLightY1, taillightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(backLightX, backLightY2, taillightRadius, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const intactWidth = car.width * 0.7;
+          ctx.fillStyle = "#B22222";
+          ctx.fillRect(car.x, car.y, intactWidth, bodyHeight);
+          ctx.fillStyle = "#B22222";
+          ctx.beginPath();
+          ctx.moveTo(car.x + intactWidth, car.y);
+          ctx.lineTo(car.x + car.width, car.y + bodyHeight * 0.2);
+          ctx.lineTo(car.x + car.width, car.y + bodyHeight * 0.8);
+          ctx.lineTo(car.x + intactWidth, car.y + bodyHeight);
+          ctx.closePath();
+          ctx.fill();
+          const roofX_def = car.x + car.width * 0.2;
+          const roofY_def = car.y - roofHeight;
+          ctx.fillStyle = "#000";
+          ctx.fillRect(roofX_def, roofY_def, car.width * 0.5, roofHeight);
+          ctx.fillStyle = "#ADD8E6";
+          const winPadding_def = (car.width * 0.5) * 0.05;
+          const windowWidth_def = ((car.width * 0.5) - 3 * winPadding_def) / 2;
+          const windowHeight_def = roofHeight * 0.6;
+          const backWinX_def = roofX_def + winPadding_def;
+          const winY_def = roofY_def + (roofHeight - windowHeight_def) / 2;
+          ctx.fillRect(backWinX_def, winY_def, windowWidth_def, windowHeight_def);
+          const frontWinX_def = backWinX_def + windowWidth_def + winPadding_def;
+          ctx.fillRect(frontWinX_def, winY_def, windowWidth_def, windowHeight_def);
+          ctx.fillStyle = "#333";
+          ctx.fillRect(car.x + car.width - 10, car.y + bodyHeight * 0.3, 10, bodyHeight * 0.4);
+          const wheelOuterRadius = 15;
+          const wheelInnerRadius = 7.5;
+          const leftWheelX = car.x + car.width * 0.3;
+          const rightWheelX = car.x + car.width * 0.7;
+          const wheelY = car.y + bodyHeight;
+          ctx.fillStyle = "gray";
+          ctx.beginPath();
+          ctx.arc(leftWheelX, wheelY, wheelOuterRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(leftWheelX, wheelY, wheelInnerRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "gray";
+          ctx.beginPath();
+          ctx.arc(rightWheelX, wheelY, wheelOuterRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "black";
+          ctx.beginPath();
+          ctx.arc(rightWheelX, wheelY, wheelInnerRadius, 0, Math.PI * 2);
+          ctx.fill();
+          const headlightRadius = 4;
+          const frontLightY1 = car.y + bodyHeight * 0.3;
+          const frontLightY2 = car.y + bodyHeight * 0.7;
+          const frontLightX = car.x + car.width + headlightRadius;
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(frontLightX, frontLightY1, headlightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(frontLightX, frontLightY2, headlightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          const taillightRadius = 4;
+          const backLightY1 = car.y + bodyHeight * 0.3;
+          const backLightY2 = car.y + bodyHeight * 0.7;
+          const backLightX = car.x - taillightRadius;
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          ctx.arc(backLightX, backLightY1, taillightRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(backLightX, backLightY2, taillightRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      
+      // --- Particle Systems for Smoke and Fire in Impulse Mode ---
+      let smokeParticles = [];
+      let fireParticles = [];
+      
+      function spawnParticles() {
+        if (Math.random() < 0.6) {
+          smokeParticles.push({
+            x: car.x + car.width,
+            y: car.y + car.height / 2,
+            radius: 5,
+            alpha: 1,
+            vx: Math.random() * 0.5 - 0.25,
+            vy: -Math.random() * 0.5
+          });
+        }
+        if (Math.random() < 0.3) {
+          fireParticles.push({
+            x: car.x + car.width,
+            y: car.y + car.height / 2,
+            radius: 3,
+            alpha: 1,
+            vx: Math.random() * 1 - 0.5,
+            vy: -Math.random() * 1
+          });
+        }
+      }
+      
+      function updateParticles(particles) {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          let p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.radius += 0.1;
+          p.alpha -= 0.01;
+          if (p.alpha <= 0) particles.splice(i, 1);
+        }
+      }
+      
+      function drawParticles(particles, color) {
+        for (let p of particles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = color.replace("ALPHA", p.alpha.toFixed(2));
+          ctx.fill();
+        }
+      }
+      
+      // --- Mode 1: Momentum Simulation ---
+      function initMomentumSim() {
+        const mass = parseFloat(momMassInput.value);
+        const velocity = parseFloat(momVelocityInput.value);
+        if (isNaN(mass) || isNaN(velocity)) {
+          infoPanel.innerText = "Error: Enter valid mass and velocity.";
+          simulationRunning = false;
+          return;
+        }
+        const roadY = canvasHeight - 120;
+        car = { x: 50, y: roadY - 30, width: 80, height: 40, v: velocity, mass: mass };
+      }
+      
+      function updateMomentumSim() {
+        car.x += car.v * dt * 20;
+        if (car.x > canvasWidth) simulationRunning = false;
+      }
+      
+      function drawMomentumSim() {
+        drawDesertBackground();
+        drawSUV(car, false);
+      }
+      
+      // --- Mode 2: Impulse Simulation ---
+      function initImpulseSim() {
+        const mass = parseFloat(impMassInput.value);
+        const velocity = parseFloat(impVelocityInput.value);
+        const collTime = parseFloat(collTimeInput.value);
+        if (isNaN(mass) || isNaN(velocity) || isNaN(collTime) || collTime <= 0) {
+          infoPanel.innerText = "Error: Enter valid mass, velocity, and collision time.";
+          simulationRunning = false;
+          return;
+        }
+        const roadY = canvasHeight - 120;
+        car = { 
+          x: 50, 
+          y: roadY - 30, 
+          width: 80, 
+          height: 40, 
+          v: velocity, 
+          mass: mass, 
+          collTime: collTime, 
+          collided: false, 
+          initialV: velocity,
+          deformed: false
+        };
+        barrierX = canvasWidth * 0.7;
+        smokeParticles = [];
+        fireParticles = [];
+      }
+      
+      let collisionStartTime = 0;
+      function updateImpulseSim() {
+        if (!car.collided) {
+          car.x += car.v * dt * 20;
+          if (car.x + car.width >= barrierX) {
+            car.collided = true;
+            collisionStartTime = elapsedTime;
+            car.deformed = true;
+            car.x = barrierX - car.width;
+          }
+        } else {
+          let t = elapsedTime - collisionStartTime;
+          if (t < car.collTime) {
+            let a = - car.initialV / car.collTime;
+            car.v = car.initialV + a * t;
+            car.x = barrierX - car.width;
+            spawnParticles();
+            updateParticles(smokeParticles);
+            updateParticles(fireParticles);
+          } else {
+            car.v = 0;
+            car.x = barrierX - car.width;
+            // End the simulation 0.5 seconds after collision is complete.
+            if (t >= car.collTime + 0.5) {
+              simulationRunning = false;
+            }
+          }
+        }
+      }
+      
+      function drawImpulseSim() {
+        drawDesertBackground();
+        ctx.fillStyle = "#444";
+        const roadY = canvasHeight - 120;
+        ctx.fillRect(barrierX, roadY - 40, 20, 80);
+        drawSUV(car, car.collided);
+        drawParticles(smokeParticles, "rgba(100,100,100, ALPHA)");
+        drawParticles(fireParticles, "rgba(255,69,0, ALPHA)");
+      }
+      
+      // --- Main update/draw loop ---
+      function update() {
+        elapsedTime += dt;
+        if (mode === "momentum") updateMomentumSim();
+        else if (mode === "impulse") updateImpulseSim();
+      }
+      
+      function draw() {
+        if (mode === "momentum") drawMomentumSim();
+        else if (mode === "impulse") drawImpulseSim();
+      }
+      
+      function updateInfo() {
+        let infoText = "Time: " + displayTime.toFixed(2) + " s | ";
+        if (mode === "momentum") {
+          let momentum = car.mass * car.v;
+          infoText += "Momentum: <span style='color:red'>" + momentum.toFixed(2) + " kg·m/s</span>";
+        } else if (mode === "impulse") {
+          if (!car.collided) {
+            infoText += "Car in transit...";
+          } else {
+            let impulse = car.mass * (0 - car.initialV);
+            let avgForce = Math.abs(impulse) / car.collTime;
+            infoText += "Initial Momentum: <span style='color:red'>" + (car.mass * car.initialV).toFixed(2) + " kg·m/s</span> | ";
+            infoText += "Impulse: <span style='color:red'>" + Math.abs(impulse).toFixed(2) + " Ns</span> | ";
+            infoText += "Avg Force: <span style='color:red'>" + avgForce.toFixed(2) + " N</span>";
+          }
+        }
+        infoPanel.innerHTML = infoText;
+      }
+      
+      function loop() {
+        if (!simulationRunning) return;
+        update();
+        // Only update displayTime if in momentum mode or before collision in impulse mode.
+        if (!(mode === "impulse" && car && car.collided)) {
+          displayTime += dt;
+        }
+        draw();
+        updateInfo();
+        animationFrameId = requestAnimationFrame(loop);
+      }
+      
+      function updateDescription(selectedMode) {
+        if (selectedMode === "momentum") {
+          descriptionDiv.innerHTML = "<strong>Momentum Simulation:</strong> A red SUV moves with constant velocity on a desert road. Momentum = mass × velocity.";
+        } else if (selectedMode === "impulse") {
+          descriptionDiv.innerHTML = "<strong>Impulse Simulation:</strong> A red SUV crashes into a barrier. When its front hits, the car’s front is deformed and emits smoke and fire. Impulse = mass × (0 − initial velocity), and average force = impulse / collision time.";
+        }
+      }
+      
+      modeInputs.forEach(input => {
+        input.addEventListener("change", function(){
+          if (simulationRunning) return;
+          mode = this.value;
+          momentumInputs.classList.toggle("active", mode === "momentum");
+          impulseInputs.classList.toggle("active", mode === "impulse");
+          updateDescription(mode);
+          drawDesertBackground();
+        });
+      });
+      
+      function disableModeInputs(disabled) {
+        modeInputs.forEach(input => input.disabled = disabled);
+      }
+      
+      function resetSimulation(clearInputs = true) {
+        simulationRunning = false;
+        elapsedTime = 0;
+        displayTime = 0;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawDesertBackground();
+        infoPanel.innerText = "Status: Not started.";
+        disableModeInputs(false);
+        if (clearInputs) {
+          momMassInput.value = "";
+          momVelocityInput.value = "";
+          impMassInput.value = "";
+          impVelocityInput.value = "";
+          collTimeInput.value = "";
+        }
+      }
+      
+      function startSimulation() {
+        mode = document.querySelector('input[name="mode"]:checked').value;
+        if (!simulationRunning) {
+          if (mode === "momentum") {
+            if (momMassInput.value.trim() === "" || momVelocityInput.value.trim() === "") {
+              infoPanel.innerText = "Error: Enter mass and velocity.";
+              return;
+            }
+            initMomentumSim();
+          } else if (mode === "impulse") {
+            if (impMassInput.value.trim() === "" || impVelocityInput.value.trim() === "" || collTimeInput.value.trim() === "") {
+              infoPanel.innerText = "Error: Enter mass, velocity, and collision time.";
+              return;
+            }
+            initImpulseSim();
+          }
+          simulationRunning = true;
+          infoPanel.innerHTML = "Status: Simulation started...";
+          disableModeInputs(true);
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      }
+      
+      startButton.addEventListener("click", function(){
+        if (!simulationRunning) startSimulation();
+      });
+      
+      resetButton.addEventListener("click", function(){
+        resetSimulation(true);
+      });
+      
+      drawDesertBackground();
+    })();
+  </script>
+</body>
+</html>

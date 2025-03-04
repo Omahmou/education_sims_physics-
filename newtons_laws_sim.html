@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Enhanced Newton's Laws Simulation</title>
+  <style>
+    /* Global Reset and Full-Screen Setup */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+    }
+    h1 {
+      width: 100%;
+      text-align: center;
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    /* Controls Panel */
+    #controls {
+      width: 100%;
+      background: #e0e0e0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    /* Info Panel */
+    #infoPanel {
+      width: 100%;
+      background: #d0d0d0;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    /* Canvas Container */
+    #canvasContainer {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 1px solid #000;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    /* Simulation Form */
+    #simForm {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+    }
+    #simForm label {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #simForm input[type="number"] {
+      width: 80px;
+      padding: 4px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #simForm input[type="radio"] { margin-right: 5px; }
+    #simForm button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      color: white;
+    }
+    #simForm button:hover { background-color: #45a049; }
+    /* Input sections for each mode – only the active one is visible */
+    .input-section { display: none; width: 100%; }
+    .input-section.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    /* Description block: only law & scenario */
+    #description {
+      font-size: 14px;
+      margin-bottom: 10px;
+      padding: 6px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Enhanced Newton's Laws Simulation</h1>
+    
+    <div id="controls">
+      <form id="simForm">
+        <!-- Mode selection -->
+        <div class="row">
+          <label>
+            <input type="radio" name="mode" value="first" checked>
+            1. Van (First Law)
+          </label>
+          <label>
+            <input type="radio" name="mode" value="second">
+            2. Forklift &amp; Box (Second Law)
+          </label>
+          <label>
+            <input type="radio" name="mode" value="third">
+            3. Cannon &amp; Cannonball (Third Law)
+          </label>
+        </div>
+        <!-- Description: Only law & scenario -->
+        <div id="description">
+          <strong>Newton's First Law:</strong> A van travels at constant velocity on the road.
+        </div>
+        
+        <!-- First Law Inputs -->
+        <div id="firstLawInputs" class="input-section active">
+          <div class="row">
+            <label>
+              Initial Velocity (m/s):
+              <input type="number" id="carVelocityInput" placeholder="e.g., 5" step="0.1">
+            </label>
+          </div>
+        </div>
+        
+        <!-- Second Law Inputs -->
+        <div id="secondLawInputs" class="input-section">
+          <div class="row">
+            <label>
+              Box Mass (kg):
+              <input type="number" id="boxMassInput" placeholder="e.g., 100" step="1" min="1">
+            </label>
+            <label>
+              Push Force (N):
+              <input type="number" id="forkForceInput" placeholder="e.g., 200" step="1">
+            </label>
+          </div>
+          <div class="row">
+            <small>Forklift &amp; Box (Second Law): The forklift (sized by push force) pushes the box (sized by mass) on a factory floor.</small>
+          </div>
+        </div>
+        
+        <!-- Third Law Inputs -->
+        <div id="thirdLawInputs" class="input-section">
+          <div class="row">
+            <label>
+              Cannon Weight (kg):
+              <input type="number" id="cannonMassInput" placeholder="e.g., 500" step="1" min="1">
+            </label>
+            <label>
+              Cannonball Weight (kg):
+              <input type="number" id="ballMassInput" placeholder="e.g., 10" step="1" min="1">
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              Firing Force (N):
+              <input type="number" id="firingForceInput" placeholder="e.g., 1000" step="1">
+            </label>
+          </div>
+          <div class="row">
+            <small>Cannon &amp; Cannonball (Third Law): A simple cannon (with its barrel on the right) fires a cannonball to the right with recoil and smoke.</small>
+          </div>
+        </div>
+        
+        <!-- Control Buttons -->
+        <div class="row">
+          <button type="button" id="startButton">Start Simulation</button>
+          <button type="button" id="resetButton">Reset</button>
+        </div>
+      </form>
+    </div>
+    
+    <div id="infoPanel">Status: Not started.</div>
+    
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  
+  <script>
+    (function(){
+      // Canvas & context
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      // Controls & inputs
+      const simForm = document.getElementById("simForm");
+      const modeInputs = document.getElementsByName("mode");
+      const descriptionDiv = document.getElementById("description");
+      const infoPanel = document.getElementById("infoPanel");
+      
+      // First Law input (Van)
+      const carVelocityInput = document.getElementById("carVelocityInput");
+      
+      // Second Law inputs (Forklift & Box)
+      const boxMassInput = document.getElementById("boxMassInput");
+      const forkForceInput = document.getElementById("forkForceInput");
+      
+      // Third Law inputs (Cannon)
+      const cannonMassInput = document.getElementById("cannonMassInput");
+      const ballMassInput = document.getElementById("ballMassInput");
+      const firingForceInput = document.getElementById("firingForceInput");
+      
+      const firstLawInputs = document.getElementById("firstLawInputs");
+      const secondLawInputs = document.getElementById("secondLawInputs");
+      const thirdLawInputs = document.getElementById("thirdLawInputs");
+      
+      const startButton = document.getElementById("startButton");
+      const resetButton = document.getElementById("resetButton");
+      
+      // Simulation variables
+      const dt = 0.02;
+      let simulationRunning = false;
+      let mode = "first";
+      let animationFrameId;
+      let elapsedTime = 0;
+      
+      let canvasWidth, canvasHeight;
+      function resizeCanvas() {
+        const container = document.getElementById("canvasContainer");
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+        if (!simulationRunning) drawBackground();
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      
+      // --- Helper: Draw Rounded Rectangle ---
+      function drawRoundedRect(ctx, x, y, width, height, radius, fillStyle) {
+        ctx.beginPath();
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + width - radius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+        ctx.lineTo(x + width, y + height - radius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+        ctx.lineTo(x + radius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+        ctx.closePath();
+        ctx.fillStyle = fillStyle;
+        ctx.fill();
+      }
+      
+      // --- Backgrounds ---
+      
+      // Van Background: Sky, sun, road, and grass.
+      function drawVanBackground() {
+        ctx.fillStyle = "#87CEEB"; // Sky
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillStyle = "yellow"; // Sun
+        ctx.beginPath();
+        ctx.arc(canvasWidth - 80, 80, 40, 0, Math.PI * 2);
+        ctx.fill();
+        const roadY = canvasHeight - 120; // Road
+        ctx.fillStyle = "#555"; // Road
+        ctx.fillRect(0, roadY, canvasWidth, 40);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 4;
+        for (let x = 0; x < canvasWidth; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, roadY + 20);
+          ctx.lineTo(x + 20, roadY + 20);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "#7CFC00"; // Grass
+        ctx.fillRect(0, roadY + 40, canvasWidth, canvasHeight - (roadY + 40));
+      }
+      
+      // Forklift Background: Factory wall and distinct floor.
+      function drawForkliftBackground() {
+        ctx.fillStyle = "#ccc"; // Wall
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        const floorY = canvasHeight - 120;
+        ctx.fillStyle = "#777"; // Floor
+        ctx.fillRect(0, floorY, canvasWidth, canvasHeight - floorY);
+      }
+      
+      // Cannon Background: Simple outdoor scene.
+      function drawCannonBackground() {
+        ctx.fillStyle = "#87CEEB"; // Sky
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillStyle = "yellow"; // Sun
+        ctx.beginPath();
+        ctx.arc(80, 80, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#7CFC00"; // Grass
+        ctx.fillRect(0, canvasHeight - 150, canvasWidth, 150);
+      }
+      
+      function drawBackground() {
+        if (mode === "first") drawVanBackground();
+        else if (mode === "second") drawForkliftBackground();
+        else if (mode === "third") drawCannonBackground();
+      }
+      
+      // --- Mode 1: Van Simulation (First Law) ---
+      let van = null;
+      function initVanSim() {
+        const v = parseFloat(carVelocityInput.value);
+        if (isNaN(v)) {
+          infoPanel.innerText = "Error: Enter a valid van velocity.";
+          simulationRunning = false;
+          return;
+        }
+        const vanWidth = 140, vanHeight = 60;
+        const roadY = canvasHeight - 120;
+        van = {
+          x: 0,
+          y: roadY - vanHeight,
+          width: vanWidth,
+          height: vanHeight,
+          v: v
+        };
+      }
+      
+      function updateVanSim() {
+        van.x += van.v * dt * 20;
+        if (van.x > canvasWidth) simulationRunning = false;
+      }
+      
+      function drawVanSim() {
+        drawVanBackground();
+        drawRoundedRect(ctx, van.x, van.y, van.width, van.height, 10, "#0077cc");
+        ctx.fillStyle = "white";
+        const numWindows = 3;
+        for (let i = 0; i < numWindows; i++) {
+          let wx = van.x + 10 + i * ((van.width - 20) / numWindows);
+          let wy = van.y + 10;
+          let wWidth = ((van.width - 20) / numWindows) - 5;
+          let wHeight = van.height / 2 - 10;
+          ctx.fillRect(wx, wy, wWidth, wHeight);
+        }
+        ctx.fillStyle = "#333";
+        ctx.beginPath();
+        ctx.arc(van.x + 30, van.y + van.height, 16, 0, Math.PI * 2);
+        ctx.arc(van.x + van.width - 30, van.y + van.height, 16, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // --- Mode 2: Forklift & Box Simulation (Second Law) ---
+      let box = null, forklift = {};
+      let forkliftForce = 0;
+      function initForkliftSim() {
+        const boxMass = parseFloat(boxMassInput.value);
+        forkliftForce = parseFloat(forkForceInput.value);
+        if (isNaN(boxMass) || boxMass <= 0 || isNaN(forkliftForce)) {
+          infoPanel.innerText = "Error: Enter valid box mass and push force.";
+          simulationRunning = false;
+          return;
+        }
+        const floorY = canvasHeight - 120;
+        const boxSize = 30 + boxMass * 0.5;
+        box = {
+          x: 250,
+          y: floorY - boxSize,
+          width: boxSize,
+          height: boxSize,
+          v: 0,
+          a: forkliftForce / boxMass
+        };
+        const baseForkWidth = 60, baseForkHeight = 40;
+        forklift.width = baseForkWidth + forkliftForce * 0.1;
+        forklift.height = baseForkHeight + forkliftForce * 0.05;
+        forklift.x = box.x - forklift.width - 5;
+        forklift.y = floorY - forklift.height;
+      }
+      
+      function updateForkliftSim() {
+        box.v += box.a * dt;
+        box.x += box.v * dt * 20;
+        forklift.x = box.x - forklift.width - 5;
+        if (box.x > canvasWidth) simulationRunning = false;
+      }
+      
+      function drawForkliftSim() {
+        drawForkliftBackground();
+        drawRoundedRect(ctx, forklift.x, forklift.y, forklift.width, forklift.height, 5, "#333");
+        ctx.fillStyle = "#777";
+        drawRoundedRect(ctx, forklift.x + 5, forklift.y - forklift.height * 0.6, forklift.width * 0.4, forklift.height * 0.6, 3, "#555");
+        ctx.fillStyle = "#ccc";
+        ctx.fillRect(forklift.x + forklift.width, forklift.y + 5, 10, 6);
+        ctx.fillRect(forklift.x + forklift.width, forklift.y + forklift.height - 11, 10, 6);
+        ctx.fillStyle = "#222";
+        ctx.beginPath();
+        ctx.arc(forklift.x + forklift.width * 0.2, forklift.y + forklift.height + 8, 8, 0, Math.PI * 2);
+        ctx.arc(forklift.x + forklift.width * 0.4, forklift.y + forklift.height + 8, 8, 0, Math.PI * 2);
+        ctx.arc(forklift.x + forklift.width * 0.6, forklift.y + forklift.height + 8, 8, 0, Math.PI * 2);
+        ctx.arc(forklift.x + forklift.width * 0.8, forklift.y + forklift.height + 8, 8, 0, Math.PI * 2);
+        ctx.fill();
+        const grillSize = 20;
+        const grillX = forklift.x + forklift.width - grillSize - 5;
+        const grillY = forklift.y + forklift.height * 0.3;
+        ctx.fillStyle = "#111";
+        ctx.fillRect(grillX, grillY, grillSize, grillSize);
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 3; i++) {
+          let slitY = grillY + (i * grillSize / 3);
+          ctx.beginPath();
+          ctx.moveTo(grillX, slitY);
+          ctx.lineTo(grillX + grillSize, slitY);
+          ctx.stroke();
+        }
+        ctx.fillStyle = "#cc5500";
+        ctx.fillRect(box.x, box.y, box.width, box.height);
+      }
+      
+      // --- Mode 3: Cannon & Cannonball Simulation (Third Law) ---
+      let cannon = null, cannonball = null;
+      let smokeParticles = [];  // Array to hold smoke particles
+      function initCannonSim() {
+        const cMass = parseFloat(cannonMassInput.value);
+        const ballMass = parseFloat(ballMassInput.value);
+        const firingForce = parseFloat(firingForceInput.value);
+        if (isNaN(cMass) || cMass <= 0 || isNaN(ballMass) || ballMass <= 0 || isNaN(firingForce)) {
+          infoPanel.innerText = "Error: Enter valid cannon parameters.";
+          simulationRunning = false;
+          return;
+        }
+        const cannonWidth = 120 + cMass * 0.15;
+        const cannonHeight = 40;
+        cannon = {
+          x: canvasWidth / 2 - cannonWidth / 2,
+          y: canvasHeight - 150 - cannonHeight,
+          width: cannonWidth,
+          height: cannonHeight,
+          mass: cMass,
+          v: 0,
+          a: -firingForce / cMass  // Recoil acceleration (to the left)
+        };
+        // Spawn the cannonball at the tip of the barrel (which is drawn on the right)
+        cannonball = {
+          x: cannon.x + cannon.width + 70,
+          y: cannon.y + cannon.height / 2,
+          radius: 12,
+          mass: ballMass,
+          v: 0,
+          a: firingForce / ballMass  // Forward acceleration (to the right)
+        };
+        smokeParticles = []; // Clear any old smoke
+      }
+      
+      // Update smoke particles:
+      function updateSmoke() {
+        // Spawn a new smoke particle from the tip of the barrel
+        let newParticle = {
+          x: cannon.x + cannon.width + 70,
+          y: cannon.y + cannon.height / 2,
+          radius: 5,
+          alpha: 1,
+          // Drift slightly upward and to the left
+          vx: -0.3,
+          vy: -0.5
+        };
+        smokeParticles.push(newParticle);
+        
+        // Update existing particles
+        for (let i = smokeParticles.length - 1; i >= 0; i--) {
+          let p = smokeParticles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.radius += 0.1;      // Gradually expand
+          p.alpha -= 0.01;      // Fade out slowly
+          if (p.alpha <= 0) {
+            smokeParticles.splice(i, 1);  // Remove faded particle
+          }
+        }
+      }
+      
+      function updateCannonSim() {
+        // Update cannon (recoil)
+        cannon.v += cannon.a * dt;
+        cannon.x += cannon.v * dt * 20;
+        // Update cannonball (fired)
+        cannonball.v += cannonball.a * dt;
+        cannonball.x += cannonball.v * dt * 20;
+        // Update smoke particles
+        updateSmoke();
+        if (cannonball.x > canvasWidth) simulationRunning = false;
+      }
+      
+      function drawCannonSim() {
+        drawCannonBackground();
+        // Draw smoke particles
+        for (let p of smokeParticles) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(100,100,100," + p.alpha.toFixed(2) + ")";
+          ctx.fill();
+        }
+        // Draw cannon body
+        ctx.fillStyle = "#000";
+        ctx.fillRect(cannon.x, cannon.y, cannon.width, cannon.height);
+        // Draw the cannon barrel on the right side
+        ctx.fillStyle = "#222";
+        ctx.fillRect(cannon.x + cannon.width, cannon.y + cannon.height / 2 - 8, 70, 16);
+        // Draw wheels
+        ctx.fillStyle = "#333";
+        ctx.beginPath();
+        ctx.arc(cannon.x + 20, cannon.y + cannon.height + 14, 14, 0, Math.PI * 2);
+        ctx.arc(cannon.x + cannon.width - 20, cannon.y + cannon.height + 14, 14, 0, Math.PI * 2);
+        ctx.fill();
+        // Draw the cannonball
+        ctx.fillStyle = "#555";
+        ctx.beginPath();
+        ctx.arc(cannonball.x, cannonball.y, cannonball.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // --- Main update/draw loop ---
+      function update() {
+        elapsedTime += dt;
+        if (mode === "first") updateVanSim();
+        else if (mode === "second") updateForkliftSim();
+        else if (mode === "third") updateCannonSim();
+      }
+      
+      function draw() {
+        if (mode === "first") drawVanSim();
+        else if (mode === "second") drawForkliftSim();
+        else if (mode === "third") drawCannonSim();
+      }
+      
+      function updateInfo() {
+        if (mode === "first") {
+          infoPanel.innerText = "Time: " + elapsedTime.toFixed(2) + " s | Van x: " + van.x.toFixed(1) + " px | v: " + van.v.toFixed(2) + " m/s";
+        } else if (mode === "second") {
+          infoPanel.innerText = "Time: " + elapsedTime.toFixed(2) + " s | Box x: " + box.x.toFixed(1) + " px | v: " + box.v.toFixed(2) + " m/s";
+        } else if (mode === "third") {
+          infoPanel.innerText = "Time: " + elapsedTime.toFixed(2) + " s | Cannon x: " + cannon.x.toFixed(1) + " px | Cannonball x: " + cannonball.x.toFixed(1) + " px";
+        }
+      }
+      
+      function loop() {
+        if (!simulationRunning) return;
+        update();
+        draw();
+        updateInfo();
+        animationFrameId = requestAnimationFrame(loop);
+      }
+      
+      // --- Update description based on mode ---
+      function updateDescription(selectedMode) {
+        if (selectedMode === "first") {
+          descriptionDiv.innerHTML = "<strong>Newton's First Law:</strong> A van travels at constant velocity on the road.";
+        } else if (selectedMode === "second") {
+          descriptionDiv.innerHTML = "<strong>Newton's Second Law:</strong> A forklift (sized by push force) pushes a box (sized by mass) on a factory floor.";
+        } else if (selectedMode === "third") {
+          descriptionDiv.innerHTML = "<strong>Newton's Third Law:</strong> A simple cannon (with its barrel on the right) fires a cannonball to the right with recoil and smoke.";
+        }
+      }
+      
+      modeInputs.forEach(input => {
+        input.addEventListener("change", function(){
+          if (simulationRunning) return;
+          mode = this.value;
+          firstLawInputs.classList.toggle("active", mode === "first");
+          secondLawInputs.classList.toggle("active", mode === "second");
+          thirdLawInputs.classList.toggle("active", mode === "third");
+          updateDescription(mode);
+          drawBackground();
+        });
+      });
+      
+      function disableModeInputs(disabled) {
+        modeInputs.forEach(input => input.disabled = disabled);
+      }
+      
+      // --- Reset Simulation ---
+      function resetSimulation(clearInputs = true) {
+        simulationRunning = false;
+        elapsedTime = 0;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        infoPanel.innerText = "Status: Not started.";
+        disableModeInputs(false);
+        if (clearInputs) {
+          carVelocityInput.value = "";
+          boxMassInput.value = "";
+          forkForceInput.value = "";
+          cannonMassInput.value = "";
+          ballMassInput.value = "";
+          firingForceInput.value = "";
+        }
+      }
+      
+      // --- Start Simulation ---
+      function startSimulation() {
+        mode = document.querySelector('input[name="mode"]:checked').value;
+        if (!simulationRunning) {
+          if (mode === "first") {
+            if (carVelocityInput.value.trim() === "") {
+              infoPanel.innerText = "Error: Enter an initial van velocity.";
+              return;
+            }
+            initVanSim();
+          } else if (mode === "second") {
+            if (boxMassInput.value.trim() === "" || forkForceInput.value.trim() === "") {
+              infoPanel.innerText = "Error: Enter valid box mass and push force.";
+              return;
+            }
+            initForkliftSim();
+          } else if (mode === "third") {
+            if (cannonMassInput.value.trim() === "" || ballMassInput.value.trim() === "" ||
+                firingForceInput.value.trim() === "") {
+              infoPanel.innerText = "Error: Enter valid cannon parameters.";
+              return;
+            }
+            initCannonSim();
+          }
+          simulationRunning = true;
+          infoPanel.innerText = "Status: Simulation started...";
+          disableModeInputs(true);
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      }
+      
+      startButton.addEventListener("click", function(){
+        if (!simulationRunning) startSimulation();
+      });
+      
+      resetButton.addEventListener("click", function(){
+        resetSimulation(true);
+      });
+      
+      drawBackground();
+    })();
+  </script>
+</body>
+</html>

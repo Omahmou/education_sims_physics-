@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Force Simulation</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 0;
+      min-height: 100vh;
+      justify-content: center;
+      font-family: sans-serif;
+    }
+    /* Grid layout to position inputs around the center container */
+    .grid-container {
+      display: grid;
+      grid-template-areas:
+        "top top top"
+        "left center right"
+        "bottom bottom bottom";
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-rows: auto auto auto;
+      gap: 10px;
+      align-items: center;
+      justify-items: center;
+      margin-bottom: 20px;
+      width: 100%;
+      max-width: 500px;
+    }
+    .grid-container > .input-box {
+      padding: 5px 10px;
+      background: #f0f0f0;
+      border-radius: 5px;
+      text-align: center;
+    }
+    /* The center container holds the box and the SVG arrow */
+    .center-container {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      background: #fff;
+      border: 1px solid #ccc;
+    }
+    .box {
+      width: 50px;
+      height: 50px;
+      background-color: blue;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-container">
+    <div class="input-box" style="grid-area: top;">
+      <label for="forceUp">Up Force:</label><br />
+      <select id="forceUpType">
+        <option value="normal">Normal</option>
+        <option value="tension">Tension</option>
+      </select>
+      <input type="number" id="forceUp" placeholder="N" min="0" style="width: 60px;" />
+    </div>
+    <div class="input-box" style="grid-area: left;">
+      <label for="forceLeft">Left Force:</label><br />
+      <select id="forceLeftType">
+        <option value="friction">Friction</option>
+        <option value="tension">Tension</option>
+      </select>
+      <input type="number" id="forceLeft" placeholder="N" min="0" style="width: 60px;" />
+    </div>
+    <div style="grid-area: center;">
+      <div class="center-container">
+        <!-- The blue box in the center -->
+        <div class="box" id="box"></div>
+        <!-- SVG overlay for the arrow -->
+        <svg id="arrow-svg" width="200" height="200" style="position: absolute; top: 0; left: 0; overflow: visible;">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="red" />
+            </marker>
+          </defs>
+          <line id="arrow-line" x1="0" y1="0" x2="0" y2="0" stroke="red" stroke-width="5" marker-end="url(#arrowhead)" visibility="hidden" />
+        </svg>
+      </div>
+    </div>
+    <div class="input-box" style="grid-area: right;">
+      <label for="forceRight">Right Force:</label><br />
+      <select id="forceRightType">
+        <!-- Removed push option; now friction and tension -->
+        <option value="friction">Friction</option>
+        <option value="tension">Tension</option>
+      </select>
+      <input type="number" id="forceRight" placeholder="N" min="0" style="width: 60px;" />
+    </div>
+    <div class="input-box" style="grid-area: bottom;">
+      <label for="forceDown">Down Force:</label><br />
+      <select id="forceDownType">
+        <option value="gravity">Gravity</option>
+        <option value="friction">Friction</option>
+      </select>
+      <input type="number" id="forceDown" placeholder="N" min="0" style="width: 60px;" />
+    </div>
+  </div>
+  <button onclick="applyForce()">Apply Forces</button>
+  <button onclick="resetSim()">Reset Simulation</button>
+  <p id="status"></p>
+  
+  <script>
+    function applyForce() {
+      // Parse force values (default to 0 if empty)
+      let forceUp = parseFloat(document.getElementById("forceUp").value) || 0;
+      let forceDown = parseFloat(document.getElementById("forceDown").value) || 0;
+      let forceLeft = parseFloat(document.getElementById("forceLeft").value) || 0;
+      let forceRight = parseFloat(document.getElementById("forceRight").value) || 0;
+      
+      // Calculate net force components (up is positive)
+      let Fx = forceRight - forceLeft;
+      let Fy = forceUp - forceDown;
+      
+      // Convert to SVG coordinate system (y increases downward)
+      let screenFx = Fx;
+      let screenFy = -Fy;
+      
+      const arrowLine = document.getElementById("arrow-line");
+      const status = document.getElementById("status");
+      
+      // If net force is zero, hide arrow and update status.
+      if (Fx === 0 && Fy === 0) {
+        arrowLine.setAttribute("visibility", "hidden");
+        status.innerText = "Forces are balanced.";
+        return;
+      }
+      
+      // Make arrow visible
+      arrowLine.setAttribute("visibility", "visible");
+      
+      // Center of the container/SVG
+      let cx = 100, cy = 100;
+      
+      // Normalize the force vector
+      let mag = Math.sqrt(screenFx * screenFx + screenFy * screenFy);
+      let dx = screenFx / mag;
+      let dy = screenFy / mag;
+      
+      // Determine the intersection of the force ray with the box boundary.
+      // The box is centered at (100,100) with a half-size of 25 (since 50x50).
+      let tX = Infinity, tY = Infinity;
+      if (dx > 0) {
+        tX = (125 - cx) / dx;
+      } else if (dx < 0) {
+        tX = (75 - cx) / dx;
+      }
+      if (dy > 0) {
+        tY = (125 - cy) / dy;
+      } else if (dy < 0) {
+        tY = (75 - cy) / dy;
+      }
+      let t = Math.min(tX, tY);
+      
+      // Starting point at the box's edge.
+      let startX = cx + dx * t;
+      let startY = cy + dy * t;
+      
+      // Extend arrow a fixed length beyond the box edge.
+      let arrowLength = 40;
+      let endX = startX + dx * arrowLength;
+      let endY = startY + dy * arrowLength;
+      
+      // Update the SVG line attributes.
+      arrowLine.setAttribute("x1", startX);
+      arrowLine.setAttribute("y1", startY);
+      arrowLine.setAttribute("x2", endX);
+      arrowLine.setAttribute("y2", endY);
+      
+      let netForceMag = Math.sqrt(Fx * Fx + Fy * Fy).toFixed(2);
+      let angleDeg = (Math.atan2(Fy, Fx) * 180 / Math.PI).toFixed(2);
+      status.innerText = `Net Force: ${netForceMag} N, Angle: ${angleDeg}° (from horizontal)`;
+    }
+    
+    function resetSim() {
+      // Clear input fields
+      document.getElementById("forceUp").value = '';
+      document.getElementById("forceDown").value = '';
+      document.getElementById("forceLeft").value = '';
+      document.getElementById("forceRight").value = '';
+      // Hide arrow and reset status message
+      document.getElementById("arrow-line").setAttribute("visibility", "hidden");
+      document.getElementById("status").innerText = "";
+    }
+  </script>
+</body>
+</html>

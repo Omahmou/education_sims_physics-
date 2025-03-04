@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Pickup Truck Collision & Momentum Conservation</title>
+  <style>
+    /* Global Reset and Full-Screen Setup */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%; height: 100%;
+      padding: 10px;
+    }
+    h1 {
+      width: 100%;
+      text-align: center;
+      font-size: 20px;
+      margin: 5px 0;
+    }
+    #shortDesc {
+      width: 100%;
+      text-align: center;
+      font-size: 14px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+    /* Controls Panel */
+    #controls {
+      width: 100%;
+      background: #e0e0e0;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    /* Info Panel */
+    #infoPanel {
+      width: 100%;
+      background: #d0d0d0;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    /* Canvas Container */
+    #canvasContainer {
+      flex: 1 1 auto;
+      width: 100%;
+      border: 1px solid #000;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    /* Simulation Form */
+    #simForm {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+    }
+    #simForm label {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #simForm input[type="number"] {
+      width: 80px;
+      padding: 4px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    #simForm button {
+      padding: 6px 12px;
+      font-size: 14px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+      background-color: #4CAF50;
+      color: white;
+    }
+    #simForm button:hover { background-color: #45a049; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>Pickup Truck Collision</h1>
+    <div id="shortDesc">
+      Verify momentum conservation using pickup trucks colliding head‑on.<br>
+      v<sub>final</sub> = (m<sub>A</sub>v<sub>A</sub> + m<sub>B</sub>v<sub>B</sub>) / (m<sub>A</sub> + m<sub>B</sub>)<br>
+      (If equal, trucks come to rest at center.)
+    </div>
+    
+    <div id="controls">
+      <form id="simForm">
+        <div class="row">
+          <label>
+            Truck A Mass (kg):
+            <input type="number" id="carAMass" placeholder="e.g., 1200" step="1" min="1">
+          </label>
+          <label>
+            Truck A Speed (m/s):
+            <input type="number" id="carASpeed" placeholder="e.g., 20" step="0.1" min="0">
+          </label>
+        </div>
+        <div class="row">
+          <label>
+            Truck B Mass (kg):
+            <input type="number" id="carBMass" placeholder="e.g., 1500" step="1" min="1">
+          </label>
+          <label>
+            Truck B Speed (m/s):
+            <input type="number" id="carBSpeed" placeholder="e.g., 15" step="0.1" min="0">
+          </label>
+        </div>
+        <div class="row">
+          <small>Note: Truck A moves right; Truck B moves left.</small>
+        </div>
+        <div class="row">
+          <button type="button" id="startButton">Start Simulation</button>
+          <button type="button" id="resetButton">Reset</button>
+        </div>
+      </form>
+    </div>
+    
+    <div id="infoPanel">Status: Not started.</div>
+    
+    <div id="canvasContainer">
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  
+  <script>
+    (function(){
+      // Canvas & context setup
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const infoPanel = document.getElementById("infoPanel");
+      
+      // Input elements
+      const carAMassInput = document.getElementById("carAMass");
+      const carASpeedInput = document.getElementById("carASpeed");
+      const carBMassInput = document.getElementById("carBMass");
+      const carBSpeedInput = document.getElementById("carBSpeed");
+      
+      const startButton = document.getElementById("startButton");
+      const resetButton = document.getElementById("resetButton");
+      
+      // --- Simulation state variables ---
+      let simulationRunning = false;
+      let animationFrameId;
+      const dt = 0.02;
+      let elapsedTime = 0;
+      
+      // Canvas dimensions and resize
+      let canvasWidth, canvasHeight;
+      function resizeCanvas() {
+        const container = document.getElementById("canvasContainer");
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        canvasWidth = canvas.width;
+        canvasHeight = canvas.height;
+        if (!simulationRunning) drawBackground();
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      
+      // Draw background (sky and ground)
+      function drawBackground() {
+        ctx.fillStyle = "#e0f7fa";
+        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        ctx.fillStyle = "#a1887f";
+        ctx.fillRect(0, canvasHeight - 100, canvasWidth, 100);
+      }
+      
+      // --- Truck Objects and Collision State ---
+      let truckA = null, truckB = null;
+      let collisionOccurred = false;
+      
+      // Initialize simulation using user inputs.
+      function initSimulation() {
+        const massA = parseFloat(carAMassInput.value);
+        const speedA = parseFloat(carASpeedInput.value);
+        const massB = parseFloat(carBMassInput.value);
+        const speedB = parseFloat(carBSpeedInput.value);
+        if (isNaN(massA) || isNaN(speedA) || isNaN(massB) || isNaN(speedB)) {
+          infoPanel.innerText = "Error: Please enter valid numbers for all inputs.";
+          return;
+        }
+        const truckWidth = 120;
+        const truckHeight = 50;
+        const groundY = canvasHeight - 100;
+        
+        truckA = {
+          x: 50,
+          y: groundY - truckHeight,
+          width: truckWidth,
+          height: truckHeight,
+          mass: massA,
+          v: speedA  // positive: rightward
+        };
+        truckB = {
+          x: canvasWidth - 50 - truckWidth,
+          y: groundY - truckHeight,
+          width: truckWidth,
+          height: truckHeight,
+          mass: massB,
+          v: -speedB // negative: leftward
+        };
+        collisionOccurred = false;
+        elapsedTime = 0;
+        infoPanel.innerHTML = "Status: Simulation started...";
+      }
+      
+      // --- Reset simulation state without clearing inputs ---
+      function resetSimulationState() {
+        simulationRunning = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        infoPanel.innerText = "Status: Not started.";
+        truckA = null;
+        truckB = null;
+        elapsedTime = 0;
+      }
+      
+      // --- Full reset: clear state and input fields ---
+      function resetSimulation() {
+        resetSimulationState();
+        carAMassInput.value = "";
+        carASpeedInput.value = "";
+        carBMassInput.value = "";
+        carBSpeedInput.value = "";
+      }
+      
+      // --- Enhanced Pickup Truck Drawing Function ---
+      function drawPickup(truck, flipped, color) {
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        if (flipped) {
+          ctx.translate(truck.x + truck.width, truck.y);
+          ctx.scale(-1, 1);
+          var x0 = 0, y0 = 0;
+        } else {
+          var x0 = truck.x, y0 = truck.y;
+        }
+        const w = truck.width, h = truck.height;
+        const bedW = w * 0.6;    // Truck bed: 60% width
+        const cabW = w - bedW;   // Cab: remaining 40%
+        
+        // Truck bed (left side)
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 + h);
+        ctx.lineTo(x0, y0 + h * 0.3);
+        ctx.quadraticCurveTo(x0, y0, x0 + bedW * 0.3, y0);
+        ctx.lineTo(x0 + bedW, y0);
+        ctx.lineTo(x0 + bedW, y0 + h);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = "#555";
+        ctx.stroke();
+        
+        // Cab with angled hood
+        ctx.beginPath();
+        ctx.moveTo(x0 + bedW, y0);
+        ctx.lineTo(x0 + bedW + cabW * 0.3, y0 + h * 0.4);
+        ctx.lineTo(x0 + w, y0 + h * 0.4);
+        ctx.lineTo(x0 + w, y0 + h);
+        ctx.lineTo(x0 + bedW, y0 + h);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.stroke();
+        
+        // Windshield
+        ctx.beginPath();
+        ctx.moveTo(x0 + bedW + cabW * 0.3, y0 + h * 0.4);
+        ctx.lineTo(x0 + w - 5, y0 + h * 0.4);
+        ctx.lineTo(x0 + w - 5, y0 + h * 0.7);
+        ctx.lineTo(x0 + bedW + cabW * 0.3, y0 + h * 0.7);
+        ctx.closePath();
+        ctx.fillStyle = "rgba(173,216,230,0.6)";
+        ctx.fill();
+        ctx.stroke();
+        
+        // Bumpers
+        ctx.fillStyle = "#333";
+        ctx.fillRect(x0 + w - 5, y0 + h * 0.45, 5, h * 0.1);
+        ctx.fillRect(x0, y0 + h * 0.55, 5, h * 0.1);
+        
+        // Wheels
+        const wheelR = h * 0.15;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(x0 + bedW * 0.3, y0 + h, wheelR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(x0 + bedW + cabW * 0.7, y0 + h, wheelR, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Lights
+        if (!flipped) {
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(x0 + w, y0 + h * 0.5, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          ctx.arc(x0, y0 + h * 0.5, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = "yellow";
+          ctx.beginPath();
+          ctx.arc(x0, y0 + h * 0.5, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "red";
+          ctx.beginPath();
+          ctx.arc(x0 + w, y0 + h * 0.5, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+      
+      // --- Update Simulation Each Frame ---
+      function updateSimulation() {
+        if (!truckA || !truckB) return;
+        elapsedTime += dt;
+        if (!collisionOccurred) {
+          truckA.x += truckA.v * dt * 20;
+          truckB.x += truckB.v * dt * 20;
+          if (truckA.x + truckA.width >= truckB.x) {
+            collisionOccurred = true;
+            const totalMomentum = truckA.mass * truckA.v + truckB.mass * truckB.v;
+            const combinedMass = truckA.mass + truckB.mass;
+            const vFinal = totalMomentum / combinedMass;
+            truckA.v = vFinal;
+            truckB.v = vFinal;
+            if (vFinal === 0) {
+              // Center trucks and end simulation.
+              truckA.x = canvasWidth / 2 - truckA.width;
+              truckB.x = canvasWidth / 2;
+              simulationRunning = false;
+            } else {
+              const midPoint = (truckA.x + truckB.x + truckB.width) / 2;
+              truckA.x = midPoint - truckB.width / 2 - truckA.width;
+              truckB.x = midPoint - truckB.width / 2;
+            }
+          }
+        } else {
+          truckA.x += truckA.v * dt * 20;
+          truckB.x += truckB.v * dt * 20;
+        }
+        if (truckA.x > canvasWidth || truckB.x + truckB.width < 0) {
+          simulationRunning = false;
+        }
+      }
+      
+      // --- Draw the Simulation Scene ---
+      function drawSimulation() {
+        drawBackground();
+        drawPickup(truckA, false, "#B22222");
+        drawPickup(truckB, true, "#1976D2");
+      }
+      
+      // --- Update the Info Panel ---
+      function updateInfo() {
+        let infoText = "Time: " + elapsedTime.toFixed(2) + " s | ";
+        if (!collisionOccurred) {
+          const totalMomentum = truckA.mass * truckA.v + truckB.mass * truckB.v;
+          infoText += "Total Momentum: " + totalMomentum.toFixed(2) + " kg·m/s";
+        } else {
+          const momentumAfter = (truckA.mass + truckB.mass) * truckA.v;
+          infoText += "Momentum after collision: " + momentumAfter.toFixed(2) + " kg·m/s (Conserved)";
+        }
+        infoPanel.innerHTML = infoText;
+      }
+      
+      // --- Main Loop ---
+      function loop() {
+        if (!simulationRunning) return;
+        updateSimulation();
+        drawSimulation();
+        updateInfo();
+        animationFrameId = requestAnimationFrame(loop);
+      }
+      
+      // --- Start Simulation (state-only reset, preserves inputs) ---
+      startButton.addEventListener("click", function(){
+        resetSimulationState();
+        initSimulation();
+        if (truckA && truckB) {
+          simulationRunning = true;
+          animationFrameId = requestAnimationFrame(loop);
+        }
+      });
+      
+      // --- Full Reset (clears simulation state and input fields) ---
+      resetButton.addEventListener("click", function(){
+        resetSimulation();
+      });
+      
+      // Function to reset simulation state without clearing inputs
+      function resetSimulationState() {
+        simulationRunning = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        infoPanel.innerText = "Status: Not started.";
+        truckA = null;
+        truckB = null;
+        elapsedTime = 0;
+      }
+      
+      drawBackground();
+    })();
+  </script>
+</body>
+</html>
