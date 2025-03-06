@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Planetary Forces Simulation</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* Global reset and styling */
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #000;
+    }
+    
+    /* Container for the canvas and overlays */
+    #container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* The canvas fills the entire container */
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    
+    /* Settings overlay for input */
+    #settingsOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.95);
+      z-index: 20;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+    }
+    #settingsOverlay h1 { margin-bottom: 10px; }
+    #settingsOverlay p { max-width: 600px; margin-bottom: 20px; }
+    #settingsOverlay label { font-size: 16px; }
+    #settingsOverlay input {
+      padding: 8px;
+      margin: 5px;
+      font-size: 16px;
+      width: 250px;
+    }
+    #settingsOverlay button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin-top: 15px;
+      cursor: pointer;
+    }
+    
+    /* Control bar for distance slider */
+    #controlBar {
+      position: absolute;
+      bottom: 60px; /* above the info overlay */
+      width: 100%;
+      text-align: center;
+      z-index: 15;
+    }
+    #controlBar label {
+      color: #fff;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+    #controlBar input[type="range"] {
+      width: 50%;
+    }
+    
+    /* Info overlay for force info and branding */
+    #infoOverlay {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      padding: 10px;
+      text-align: center;
+      font-size: 16px;
+      z-index: 10;
+    }
+    #infoOverlay #brandingBar {
+      margin-top: 5px;
+      font-size: 14px;
+    }
+    
+    /* Reset button */
+    #resetButton {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 30;
+      padding: 8px 16px;
+      font-size: 16px;
+      background-color: #444;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #resetButton:hover { background-color: #666; }
+  </style>
+</head>
+<body>
+  <!-- Settings overlay: collect planet properties in new unit values -->
+  <div id="settingsOverlay">
+    <h1>Planetary Forces Simulation</h1>
+    <p>
+      In this simulation, two planets interact through gravity and electrostatic forces.
+      Input values are in arbitrary units. Use <strong>mass</strong> (affecting planet size)
+      and <strong>charge</strong> (which determines the polarity indicator).
+      Distances are measured in light‑years.
+    </p>
+    <div style="margin-bottom: 20px;">
+      <h2>Planet A</h2>
+      <label for="massA">Mass (units):</label>
+      <input type="number" id="massA" placeholder="e.g., 6">
+      <br>
+      <label for="chargeA">Charge (units):</label>
+      <input type="number" id="chargeA" placeholder="e.g., 1">
+    </div>
+    <div style="margin-bottom: 20px;">
+      <h2>Planet B</h2>
+      <label for="massB">Mass (units):</label>
+      <input type="number" id="massB" placeholder="e.g., 3">
+      <br>
+      <label for="chargeB">Charge (units):</label>
+      <input type="number" id="chargeB" placeholder="e.g., -1">
+    </div>
+    <button id="startButton">Start Simulation</button>
+  </div>
+
+  <!-- Main container -->
+  <div id="container">
+    <canvas id="canvas"></canvas>
+    <!-- Distance slider (for a fixed horizontal movement) -->
+    <div id="controlBar" style="display:none;">
+      <label for="distanceSlider">Distance:</label>
+      <input type="range" id="distanceSlider" min="0" max="100" value="50">
+    </div>
+    <!-- Info overlay: displays force info and branding -->
+    <div id="infoOverlay">
+      <div id="forceDisplay">
+        <span id="forceInfo"></span>
+        <br>
+        <small>G = 1, k = 1</small>
+      </div>
+      <div id="brandingBar">
+        Dr. Omar Mahmoud Studios © 2025
+      </div>
+    </div>
+    <button id="resetButton" style="display:none;">Reset</button>
+  </div>
+
+  <script>
+    (function() {
+      // Constants for simulation.
+      const G = 1; // Gravitational constant (arbitrary units)
+      const k = 1; // Electrostatic constant (arbitrary units)
+      
+      // Conversion: 1 pixel = 0.0025 lightyears.
+      const lightyearPerPixel = 0.0025;
+      
+      // Get DOM elements.
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const container = document.getElementById("container");
+      const resetButton = document.getElementById("resetButton");
+      const distanceSlider = document.getElementById("distanceSlider");
+      const controlBar = document.getElementById("controlBar");
+      
+      // Offscreen canvas for starry background.
+      let starCanvas = document.createElement("canvas");
+      let starCtx = starCanvas.getContext("2d");
+      
+      function generateStars() {
+        starCanvas.width = canvas.width;
+        starCanvas.height = canvas.height;
+        starCtx.fillStyle = "#000";
+        starCtx.fillRect(0, 0, starCanvas.width, starCanvas.height);
+        const starCount = 200;
+        for (let i = 0; i < starCount; i++) {
+          let x = Math.random() * starCanvas.width;
+          let y = Math.random() * starCanvas.height;
+          let radius = Math.random() * 1.5;
+          starCtx.beginPath();
+          starCtx.arc(x, y, radius, 0, Math.PI * 2);
+          starCtx.fillStyle = "white";
+          starCtx.fill();
+        }
+      }
+      
+      // Define planets with default properties.
+      // Positioned along a horizontal line (y = 0.5); the slider controls separation.
+      let planetA = { x: 0.25, y: 0.5, mass: 6, charge: 1 };
+      let planetB = { x: 0.75, y: 0.5, mass: 3, charge: -1 };
+      
+      // Update pixel positions and compute radii based on mass.
+      function updatePlanetPositions() {
+        planetA.x_px = planetA.x * canvas.width;
+        planetA.y_px = planetA.y * canvas.height;
+        planetB.x_px = planetB.x * canvas.width;
+        planetB.y_px = planetB.y * canvas.height;
+        
+        // Use a scaling factor relative to the canvas size.
+        const scaleFactor = Math.min(canvas.width, canvas.height) / 200;
+        planetA.radius = planetA.mass * scaleFactor;
+        planetB.radius = planetB.mass * scaleFactor;
+      }
+      
+      // Resize canvas and update positions and stars.
+      function resizeCanvas() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        updatePlanetPositions();
+        generateStars();
+      }
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      
+      // Use the slider to control planet separation.
+      // Slider value (0–100) positions planets symmetrically:
+      // planetA.x = 0.5 - (sliderVal/200) and planetB.x = 0.5 + (sliderVal/200)
+      function updatePlanetPositionsFromSlider() {
+        let sliderVal = parseFloat(distanceSlider.value);
+        planetA.x = 0.5 - (sliderVal / 200);
+        planetB.x = 0.5 + (sliderVal / 200);
+        updatePlanetPositions();
+      }
+      distanceSlider.addEventListener("input", updatePlanetPositionsFromSlider);
+      
+      // Draw a planet with a radial gradient and a charge indicator on its edge.
+      function drawPlanet(planet, innerColor, outerColor) {
+        // Draw the planet circle.
+        let gradient = ctx.createRadialGradient(
+          planet.x_px, planet.y_px, planet.radius * 0.1,
+          planet.x_px, planet.y_px, planet.radius
+        );
+        gradient.addColorStop(0, innerColor);
+        gradient.addColorStop(1, outerColor);
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(planet.x_px, planet.y_px, planet.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw the charge indicator.
+        let chargeIndicator = (planet.charge > 0) ? "+" : (planet.charge < 0 ? "−" : "0");
+        // Font size scales with planet radius and charge magnitude.
+        let baseFontSize = planet.radius * 0.8;
+        let additionalFontSize = 2 * Math.abs(planet.charge);
+        let fontSize = baseFontSize + additionalFontSize;
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold " + fontSize + "px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        // Position indicator on the edge: right edge for positive (or zero), left for negative.
+        let xOffset = (planet.charge >= 0) ? planet.radius : -planet.radius;
+        let textX = planet.x_px + xOffset;
+        let textY = planet.y_px;
+        ctx.fillText(chargeIndicator, textX, textY);
+      }
+      
+      // Format numbers to two decimals.
+      function formatNumber(num) {
+        return num.toFixed(2);
+      }
+      
+      // Main animation loop.
+      function draw() {
+        // Draw the starry background.
+        ctx.drawImage(starCanvas, 0, 0);
+        
+        // Draw the planets.
+        drawPlanet(planetA, "#00aaff", "#003366");
+        drawPlanet(planetB, "#ff9933", "#cc3300");
+        
+        // Calculate the distance in pixels and convert to lightyears.
+        const dx = planetB.x_px - planetA.x_px;
+        const dy = planetB.y_px - planetA.y_px;
+        let distancePixels = Math.hypot(dx, dy);
+        if (distancePixels < 1) distancePixels = 1;
+        const distanceLY = distancePixels * lightyearPerPixel;
+        
+        // Calculate forces (for display purposes).
+        let gravForce = G * (planetA.mass * planetB.mass) / Math.pow(distanceLY, 2);
+        let elecForce = k * Math.abs(planetA.charge * planetB.charge) / Math.pow(distanceLY, 2);
+        let elecType = (planetA.charge * planetB.charge < 0) ? "Attractive" : "Repulsive";
+        
+        // (Force arrows have been removed for clarity.)
+        
+        // Update the info overlay.
+        document.getElementById("forceInfo").textContent =
+          "Distance: " + formatNumber(distanceLY) + " ly | " +
+          "Gravitational Force: " + formatNumber(gravForce) + " N | " +
+          "Electrostatic Force: " + formatNumber(elecForce) + " N (" + elecType + ")";
+        
+        requestAnimationFrame(draw);
+      }
+      draw();
+      
+      // Reset simulation: update slider, masses, charges, and positions.
+      function resetSimulation() {
+        distanceSlider.value = 50;
+        updatePlanetPositionsFromSlider();
+        planetA.mass = (parseFloat(document.getElementById("massA").value) || 6);
+        planetA.charge = (parseFloat(document.getElementById("chargeA").value) || 1);
+        planetB.mass = (parseFloat(document.getElementById("massB").value) || 3);
+        planetB.charge = (parseFloat(document.getElementById("chargeB").value) || -1);
+        updatePlanetPositions();
+      }
+      
+      // Start simulation: set parameters, hide settings overlay, show slider and reset button.
+      document.getElementById("startButton").addEventListener("click", function() {
+        planetA.mass = (parseFloat(document.getElementById("massA").value) || 6);
+        planetA.charge = (parseFloat(document.getElementById("chargeA").value) || 1);
+        planetB.mass = (parseFloat(document.getElementById("massB").value) || 3);
+        planetB.charge = (parseFloat(document.getElementById("chargeB").value) || -1);
+        updatePlanetPositions();
+        document.getElementById("settingsOverlay").style.display = "none";
+        resetButton.style.display = "block";
+        controlBar.style.display = "block";
+        updatePlanetPositionsFromSlider();
+      });
+      
+      // Reset button: revert simulation and show settings overlay.
+      resetButton.addEventListener("click", function() {
+        resetSimulation();
+        document.getElementById("settingsOverlay").style.display = "flex";
+        resetButton.style.display = "none";
+        controlBar.style.display = "none";
+      });
+      
+    })();
+  </script>
+</body>
+</html>
